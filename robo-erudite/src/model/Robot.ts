@@ -1,10 +1,11 @@
 import { Letter } from "./Letter";
 import { WordSite } from "./WordSite";
-// import { LetterBank } from "./model/LetterBank";
-// import { Player } from "./model/Player";
+import { LetterBank } from "./LetterBank";
 import { PlayField } from "./PlayField";
 import { Dictionary } from "./Dictionary";
 import { LetterSite } from "./LetterSite";
+
+type SearchResult = { ws: WordSite; word: string } | undefined;
 
 export class Robot {
   // словарь
@@ -62,10 +63,10 @@ export class Robot {
     return success;
   }
 
-  selectWorForSiteByAvailLetters(
+  selectWordForSiteByAvailLetters(
     wordsOfFixLen: string[],
     ws: WordSite
-  ): { ws: WordSite; word: string } | undefined {
+  ): SearchResult {
     const wordSiteTemlate = ws.templateStr();
     const regexp = new RegExp(wordSiteTemlate);
 
@@ -87,7 +88,7 @@ export class Robot {
     maxWlen: number
   ): WordSite | undefined {
     this.letters = letters;
-    let resultWS: WordSite | undefined = undefined;
+    let resultWS: SearchResult = undefined;
     const gSize = this.playField.gridSize;
     let nLen = Math.min(maxWlen, gSize);
     for (let pass = 0; pass < 2; pass++) {
@@ -96,46 +97,45 @@ export class Robot {
           ? this.playField.templatesForColumns(letters.length)
           : this.playField.templatesForRows(letters.length);
       for (; nLen >= minWlen; nLen--) {
-        const dirTimerId = (pass === 0 ? "VERT:" : "HORZ:") + `wLen${nLen}`;
+        // const dirTimerId = (pass === 0 ? "VERT:" : "HORZ:") + `wLen${nLen}`;
         // console.time(dirTimerId);
+        let wordWSpass:SearchResult = undefined;
         for (let i = 0; i < templateWordSites[gSize - nLen].length; i++) {
           const tws = templateWordSites[gSize - nLen][i];
           // console.log(`nLen=${nLen} i=${i} ptn=${tws.pattern}`);
           const wordsOfLength = this.gameDictionary.getWordsOfLength(
             tws.length
           );
-          const wordWSOut = this.selectWorForSiteByAvailLetters(
+          wordWSpass = this.selectWordForSiteByAvailLetters(
             wordsOfLength,
             tws
           );
-          if (wordWSOut) {
+          if (wordWSpass) {
             if (resultWS) {
-              if (wordWSOut.ws.length > resultWS.length)
-                resultWS = wordWSOut.ws;
-              else if (wordWSOut.ws.length === resultWS.length) {
-                // здесь неправильный подчсёт очков в wordWSOut.ws на месте уже поставленных букв пустоты
-                if (wordWSOut.ws.points > resultWS.points)
-                  resultWS = wordWSOut.ws;
+              if (wordWSpass.word.length > resultWS.word.length)
+                resultWS = wordWSpass;
+              else if (wordWSpass.word.length === resultWS.word.length) {
+                if (LetterBank.wordCost(wordWSpass.word) > LetterBank.wordCost(resultWS.word))
+                  resultWS = wordWSpass;
               } else break;
-            } else resultWS = wordWSOut.ws;
-            // console.log(
-            //   (pass === 0 ? "VERT: " : "HORZ: ") +
-            //     `cлово найдено: ${wordWSOut.word}`
-            // );
+            } else resultWS = wordWSpass;
           }
         }
         // console.timeEnd(dirTimerId);
         if (resultWS) break;
       }
       if (pass == 0) {
-        if (resultWS)
           // на втором проходе ищем слово не короче найденного
-          nLen = resultWS.length;
-        else nLen = Math.min(maxWlen, gSize);
+        if (resultWS)
+          minWlen = resultWS.word.length;
+        nLen = Math.min(maxWlen, gSize);
+        if(resultWS){
+          console.log(`pass0 word ${resultWS.word}, minWlen=${minWlen}`)
+        }
       }
     }
 //    if (!resultWS) console.log("Не удалось найти слово");
     this.letters = [];
-    return resultWS;
+    return resultWS?.ws;
   }
 }

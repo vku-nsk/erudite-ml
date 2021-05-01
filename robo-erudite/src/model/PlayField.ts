@@ -5,23 +5,29 @@ import { WordSite } from "./WordSite";
 
 export class PlayField {
   gridSize: number;
-
-  // слова на поляне
-  usedWords: string[];
   // игровая поляна
   cellGrid: LetterSite[][];
-  // поставленные в текущем ходе; их можно изменять
-  cellsInTheGo: LetterSite[] = [];
+  // буквоместа текущего хода; их можно изменять
+  cellsInTheGo: LetterSite[];
+  // слова на поляне
+  usedWords: string[];
   // общий банк букв
   letterBank: LetterBank;
   // слова текущего хода активного игрока
   wordsInTheGo: WordSite[];
+  // слова предыдущего завершённого хода
+  wordsInPrevGo: WordSite[];
+  //
+  prevGoPlayerId: number;
 
-  constructor(wordsInTheGo: WordSite[]) {
-    this.gridSize = 15;
+  constructor(gridSize: number, wordsInTheGo: WordSite[]) {
+    this.gridSize = gridSize;
     this.cellGrid = this.generateCells();
     this.letterBank = new LetterBank();
+    this.cellsInTheGo = [];
     this.usedWords = [];
+    this.wordsInPrevGo = [];
+    this.prevGoPlayerId=-1;
     this.wordsInTheGo = wordsInTheGo;
   }
 
@@ -63,7 +69,7 @@ export class PlayField {
       this.wordsInTheGo.push(...this.collectWorsOfTheGo());
       return true;
     } else {
-      console.log("Not valid cell indexies");
+      console.log("Invalid cell indexies");
       return false;
     }
   }
@@ -87,20 +93,41 @@ export class PlayField {
     });
   }
 
-  afterGoComplete() {
+  isLetterInPrevGo(lt: LetterSite): boolean {
+    const allLetterSites: LetterSite[]=[];
+    this.wordsInPrevGo.forEach( (w) => {
+      w.letters.forEach( (lt) => {
+        if(!allLetterSites.includes(lt))
+        allLetterSites.push(lt);
+      });
+    });  
+    const bIn=allLetterSites.includes(lt);
+
+    return bIn;
+  }
+
+  afterGoComplete(idPlayer: number) {
+    this.wordsInPrevGo.length=0;
     this.wordsInTheGo.forEach(ws => {
       const str = ws.str;
-      if (str.length !== 0) this.usedWords.push(str);
+      if (str.length !== 0){
+        this.usedWords.push(str);
+        ws.letters.forEach(lt => lt.idPlayer=idPlayer);
+        this.wordsInPrevGo.push(ws);
+      }
     });
+    if(this.wordsInTheGo.length !== 0)
+      this.prevGoPlayerId=idPlayer;  
+    else
+      this.prevGoPlayerId=-1;  
 
     // фиксация ячеек
     this.cellsInTheGo.forEach(lt => {
       lt.letter?.clean();
     });
     this.cellsInTheGo.length=0;
-    // console.log("Слова на поляне:");
-    // this.usedWords.forEach(w => console.log(`${w}`));
   }
+
   // имеется ли сосед по вертикали или горизонтали
   letterHasHeighbor(letterOnPlayField: LetterSite): boolean {
     if (letterOnPlayField.row + 1 < this.gridSize) {

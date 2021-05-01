@@ -1,103 +1,121 @@
 <template>
-  <div class="player-container">
-    <h2
-      :class="{ 'human-header': isInteractive, 'robot-header': !isInteractive }"
-    >
-      <font-awesome-icon class="player-icon" icon="user" v-if="isInteractive" />
-      <font-awesome-icon
-        class="player-icon"
-        icon="robot"
-        v-if="!isInteractive"
-      />
-      <span>{{ player.totalPoints }}</span>
-      <span class="extra-points"> ({{ player.extraPoints }})</span>
-    </h2>
-    <div class="letters-container">
-      <div
-        class="player-letter"
-        :class="{ 'current-letter': isLetterCurrent(letter) }"
-        v-for="letter in letters"
-        :key="letter.id"
+  <div :id="'player'+player.id" class="player-container">
+    <div class="player-info">
+      <h2
+        :class="{ 'human-header': isInteractive, 'robot-header': !isInteractive }"
       >
-        <BaseLetter :letterData="letter" @click="setCurrentLetter(letter)" />
-        <div class="item-check" v-if="checkForExchange">
-          <input
-            class="item-cb"
-            type="checkbox"
-            v-model="letter.flagged"
-            @change="letterCheckChange($event, letter)"
-          />
-        </div>
-      </div>
-    </div>
-    <div class="skipped-go">
-      <div class="skipped-mark" v-if="player.numSkippedGo > 0">
+        <font-awesome-icon class="player-icon" icon="user" v-if="isInteractive" />
         <font-awesome-icon
-         :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
-         icon="times-circle"/>
-      </div>
-      <div class="skipped-mark" v-if="player.numSkippedGo > 1">
-        <font-awesome-icon 
-         :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
-        icon="times-circle"/>
-      </div>
-      <div class="skipped-mark" v-if="player.numSkippedGo > 2">
-        <font-awesome-icon 
-         :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
-        icon="times-circle"/>
-      </div>
-    </div>  
-    <div v-if="isInteractive" class="buttons-container">
-      <button
-        class="btn-command"
-        :class="{'btn-highlight' : checkForExchange}"
-        @click="selectForExchange"
-        :disabled="!isActive || lettersArrNotFull"
-      >
-        Менять
-      </button>
-      <button
-        class="btn-command"
-        @click="getClue"
-        :disabled="!isActive || lettersArrNotFull || checkForExchange"
-      >
-        Подсказка
-      </button>
-      <button
-        class="btn-command"
-        :disabled="!isActive || !canCompleteGo()"
-        @click="goComplete"
-      >
-        <span v-if="goMode === 2">Готово</span>
-        <span v-if="goMode === 0">Пропустить</span>
-        <span v-if="goMode === 1">Обменять</span>
-      </button>
-      <button class="btn-command" 
-        :disabled="!isActive"
-        @click="startNewGame">
-        Завершить
-      </button>
-      <!-- <button class="btn-command" @click="saveGame">
-        Save
-      </button>
-      <div class="btn-command">
-        <input type="file" @change="onFileChange" />
-        <button class="btn-command" @click="loadGame">
-          Load
-        </button>
-      </div> -->
-    </div>
-    <div class="words-ingo-container">
-      <div v-if="player.goPoints !== 0">
+          class="player-icon"
+          icon="robot"
+          v-if="!isInteractive"
+        />
+        <span>{{ player.totalPoints }}</span>
+        <span class="extra-points"> ({{ player.extraPoints }})</span>
+      </h2>
+      <div class="orient-portrait" v-if="player.id === 0 && player.goPoints !== 0">
         <span class="go-points">
           + {{ player.goPoints }}</span
         >
         <span class="total-points"> = {{ player.goPoints + player.totalPoints }}</span>
       </div>
+      <div v-if="numLettersInBank" class="bank-info">
+        Букв в банке {{numLettersInBank}}
+      </div>
+      <div class="skipped-go orient-portrait">
+        <div class="skipped-mark" v-if="player.numSkippedGo > 0">
+          <font-awesome-icon
+          :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+          icon="times-circle"/>
+        </div>
+        <div class="skipped-mark" v-if="player.numSkippedGo > 1">
+          <font-awesome-icon 
+          :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+          icon="times-circle"/>
+        </div>
+        <div class="skipped-mark" v-if="player.numSkippedGo > 2">
+          <font-awesome-icon 
+          :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+          icon="times-circle"/>
+        </div>
+      </div>  
+    </div>
+    <div :id="'ltcontainer'+player.id" class="letters-container">
+      <div class="consonants-container" :class="proportionClass(consonants)">
+        <div
+          class="player-letter"
+          :class="letterClasses(letter)"
+          v-for="letter in consonants"
+          :key="letter.id"
+        >
+          <BaseLetter :letter="letter"
+            :showCheckBtn="player.selectForChange" 
+            v-model:hasMark="letter.flagged"
+            @click="setCurrentLetter(letter)"
+            @checkStateChanged="letterCheckChange(letter)" 
+          />
+        </div>
+      </div>
+      <div class="marks-container" :class="proportionClass(marks)">
+        <div
+          class="player-letter"
+          :class="letterClasses(letter)"
+          v-for="letter in marks"
+          :key="letter.id"
+        >
+          <BaseLetter :letter="letter" 
+            :showCheckBtn="player.selectForChange" 
+            v-model:hasMark="letter.flagged"
+            @click="setCurrentLetter(letter)"
+            @checkStateChanged="letterCheckChange(letter)" 
+          />
+        </div>
+      </div>
+      <div class="vowels-container" :class="proportionClass(vowels)">
+        <div
+          class="player-letter"
+          :class="letterClasses(letter)"
+          v-for="letter in vowels"
+          :key="letter.id"
+        >
+          <BaseLetter :letter="letter" 
+            :showCheckBtn="player.selectForChange" 
+            v-model:hasMark="letter.flagged"
+            @click="setCurrentLetter(letter)"
+            @checkStateChanged="letterCheckChange(letter)" 
+          />
+        </div>
+      </div>
+    </div>
+    <div class="words-ingo-container" v-if="player.id===0">
       <div class="go-word" v-for="word in wordsInGo" :key="word.str">
         {{ word.str }} {{ word.points }}
       </div>
     </div>
+    <div class="orient-landscape" v-if="player.id === 0 && player.goPoints !== 0">
+      <span class="go-points">
+        + {{ player.goPoints }}</span
+      >
+      <span class="total-points"> = {{ player.goPoints + player.totalPoints }}</span>
+    </div>
+    <div class="skipped-go orient-landscape">
+      <div class="skipped-mark" v-if="player.numSkippedGo > 0">
+        <font-awesome-icon
+        :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+        icon="times-circle"/>
+      </div>
+      <div class="skipped-mark" v-if="player.numSkippedGo > 1">
+        <font-awesome-icon 
+        :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+        icon="times-circle"/>
+      </div>
+      <div class="skipped-mark" v-if="player.numSkippedGo > 2">
+        <font-awesome-icon 
+        :class="{'i-warn' : player.numSkippedGo < 2, 'i-critical' : player.numSkippedGo >= 2}" 
+        icon="times-circle"/>
+      </div>
+    </div>  
+
   </div>
 </template>
 
@@ -107,12 +125,6 @@ import { Player } from "../model/Player";
 import { Letter } from "../model/Letter";
 import { WordSite } from "../model/WordSite";
 import BaseLetter from "./UI/BaseLetter.vue";
-
-enum GoCompleteMode {
-  skip=0,
-  exchange=1,
-  ready=2
-}
 
 export default defineComponent({
   name: "PlayerPanel",
@@ -124,61 +136,20 @@ export default defineComponent({
     player: {
       type: Object as PropType<Player>,
       required: true
+    },
+    numLettersInBank: {
+      type: Number
     }
   },
   emits: {
     "set-current-letter": function(letter: Letter) {
       return true;
-    },
-    "select-exchange": function(exchangeMode: boolean) {
-      return true;
-    },
-    "exchange-letters": function(letters: Letter[]): boolean {
-      if (letters) {
-        return true;
-      }
-      return false;
-    },
-    "go-complete": function() {
-      return true;
-    },
-    "get-clue": function() {
-      return true;
-    },
-    "start-new-game": function() {
-      return true;
-    },
-    "save-game": function() {
-      return true;
-    },
-    "load-game": function(file: File) {
-      return true;
     }
   },
 
-  data() {
-    return {
-      checkForExchange: false,
-      fileToLoad: {} as File
-    };
-  },
   computed: {
-    goMode() : GoCompleteMode{
-      if(this.player.chars.length === this.player.maxNumLetters
-        && !this.checkForExchange)
-        return GoCompleteMode.skip;
-      if(this.player.chars.length === this.player.maxNumLetters
-        && this.checkForExchange){
-        if( this.letters.some(el => {return el.flagged;}) )
-          return GoCompleteMode.exchange;
-        else
-          return GoCompleteMode.skip;
-      }
-      return GoCompleteMode.ready;
-    },
-
     isInteractive(): boolean {
-      return this.player.interartive;
+      return this.player.interactive;
     },
 
     isActive(): boolean {
@@ -189,6 +160,18 @@ export default defineComponent({
       return this.player.chars;
     },
 
+    consonants() : Letter[] {
+      return this.player.chars.filter((lt) => {return lt.isConsonant});
+    },
+
+    vowels() : Letter[] {
+      return this.player.chars.filter((lt) => {return lt.isVowel});
+    },
+    
+    marks() : Letter[] {
+      return this.player.chars.filter((lt) => {return lt.isMark});
+    },
+
     wordsInGo(): WordSite[] {
       return this.player.wordsInTheGo;
     },
@@ -197,9 +180,36 @@ export default defineComponent({
       return this.letters.length !== this.player.maxNumLetters;
     }
   },
+
   methods: {
+    letterClasses(letter: Letter) {
+      return {'current-letter': this.isLetterCurrent(letter), 
+          'lt-vowel': letter.isVowel,
+          'lt-mark': letter.isMark, 
+          'lt-consonant': letter.isConsonant};
+    },
+
+    proportionClass(letterArr: Letter[]) {
+      const cn=letterArr.length;
+      switch (cn) {
+        case 0:
+          return {'prop-0': true};
+        case 1:
+          return  {'prop-10': true};
+        case 2:
+          return  {'prop-20': true};
+        case 3:
+          return  {'prop-40': true};
+        case 4:
+        case 5:
+          return  {'prop-60': true};
+        default:
+          return  {'prop-80': true};
+      }
+    },
+
     setCurrentLetter(letter: Letter) {
-      if(this.checkForExchange)
+      if(this.player.selectForChange)
         letter.flagged=!letter.flagged;
       else
         this.$emit("set-current-letter", letter);
@@ -210,150 +220,283 @@ export default defineComponent({
       return this.player.currentLetter === letter;
     },
 
-    letterCheckChange(event: Event, letter: Letter) {
+    letterCheckChange(letter: Letter) {
       const checkedLetters = this.letters.filter(el => {
         return el.flagged;
       });
-    },
-
-    selectForExchange() {
-      this.checkForExchange = !this.checkForExchange;
-      this.letters.forEach(el => {
-        el.flagged = this.checkForExchange;
-      });
-      this.$emit("select-exchange", this.checkForExchange);
-    },
-
-    getClue() {
-      this.$emit("get-clue");
-    },
-
-    canCompleteGo(): boolean {
-      return true;
-      // if (this.checkForExchange) {
-      //   return (
-      //     this.letters.filter(el => {
-      //       return el.flagged;
-      //     }).length !== 0
-      //   );
-      // } else {
-      //   return true;
-      // }
-    },
-
-    goComplete() {
-      if (this.checkForExchange) {
-        const checkedLetters = this.letters.filter(el => {
-          return el.flagged;
-        });
-        this.checkForExchange = false;
-        if(checkedLetters.length !== 0)
-          this.$emit("exchange-letters", checkedLetters);
-        else
-          this.$emit("go-complete");  
-      } else {
-        this.$emit("go-complete");
-      }
-    },
-
-    startNewGame() {
-      this.$emit("start-new-game");
-    },
-
-    saveGame() {
-      this.$emit("save-game");
-    },
-
-    onFileChange(evt: Event) {
-      const inputEl = evt.target as HTMLInputElement;
-      if (!inputEl.files?.length) return;
-      this.fileToLoad = inputEl.files[0];
-    },
-
-    loadGame() {
-      this.$emit("load-game", this.fileToLoad);
     }
+
   }
 });
 </script>
 
 <style scoped>
+
 .player-container {
   display: -webkit-flex;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-  min-width: 124px;
 }
 
-.player-container h2 {
-  margin-left: 0;
-  margin-right: 0;
-  margin-top: 2px;
-  margin-bottom: 4px;
-  padding-left: 2px;
-  padding-right: 2px;
+.player-info {
+  width: 100%;
+  display: flex;
 }
 
 .letters-container {
   display: -webkit-flex;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 340;
-  height: 340px;
 }
 
-.skipped-go {
-  flex: 0 0 36;
-  height: 36px;
-  border-top: 1px solid black;
-  border-bottom: 1px solid black;
-  width: 100%;
+.lt-vowel {
+  background-color: rgba(255, 255, 0, 0.4);
 }
 
-.skipped-mark {
-  display: inline-block;
-  font-size: 30px;
-}
-
-.i-warn {
-  color: yellow;
-}
-
-.i-critical {
-  color: red;
-}
-
-.buttons-container {
-  display: -webkit-flex;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 0 0 auto;
-  justify-content: flex-start;
-  padding-bottom: 2px;
-  padding-left: 2px;
-  padding-right: 2px;
+.lt-mark {
+  background-color: rgba(192, 0, 0, 0.2);
 }
 
 .words-ingo-container {
   display: -webkit-flex;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  flex: 1 1 auto;
-  justify-content:flex-start;
-  padding-left: 4px;
-  width: 100%;
 }
 
 .go-word {
-  font-size: 0.8em;
-  text-align: center;
   text-transform: lowercase;
-  width: 100%;
+}
+
+@media (orientation: landscape){
+
+  .orient-portrait {
+    display: none;
+  } 
+
+  .orient-landscape {
+    display: initial;
+  } 
+
+  .player-container {
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: space-between;
+  }
+
+  .player-info {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .player-info h2 {
+    display: inline-block;
+  }
+
+  .letters-container {
+    flex-direction: column;
+    width: 100%;
+    padding-left: 4px;
+    padding-right: 4px;
+    align-items: center;
+    /* min-height: 24.5rem; */
+  }
+
+  #player1 .letters-container {
+    gap: 0.5em;
+  }
+
+  .consonants-container,
+  .marks-container,
+  .vowels-container {
+    display: -webkit-flex;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+  } 
+
+  #ltcontainer0 .consonants-container {
+    align-self: flex-end;
+  }
+
+  #ltcontainer0 .marks-container {
+    align-self:center;
+  }
+
+  #ltcontainer0 .vowels-container {
+    align-self: flex-start;
+  }
+
+  .skipped-go {
+    flex: 0 0 2.25rem;
+    height: 2.25rem;
+    width: 100%;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
+  }
+
+  .words-ingo-container {
+    flex-direction: column;
+    align-items: center;
+    flex: 1 1 auto;
+    justify-content:flex-end;
+    width: 100%;
+    font-size: 1.5rem;
+    margin-top: auto;
+  }
+
+  .go-word {
+    font-size: 1em;
+    text-align: center;
+    width: 100%;
+  }
+
+  #ltcontainer0 .lt-vowel {
+    align-self:flex-start;
+  }
+
+  #ltcontainer0 .lt-vowel:nth-of-type(2n)
+  {
+    margin-left: 1rem;
+  }
+
+  #ltcontainer0 .lt-consonant {
+    align-self:flex-end;
+  }
+
+  #ltcontainer0 .lt-consonant:nth-of-type(2n)
+  {
+    margin-right: 1rem;
+  }
+
+  #ltcontainer0 .lt-mark {
+    align-self: center;
+  }
+
+  .bank-info {
+    flex: 0 0 auto;
+  }
+}  /* @media (orientation: landscape) */
+
+@media (orientation: portrait){
+
+  .orient-portrait {
+    display: initial;
+  } 
+
+  .orient-landscape {
+    display: none;
+  } 
+
+  .player-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .player-info {
+    font-size: 1.5rem;
+    justify-content:space-between;
+    align-items: center;
+    background-color: rgba(192, 192, 192, 0.2);
+ }
+
+  .player-info h2 {
+    display: inline-block;
+    margin: 0%;
+    padding: 2px;
+  }
+
+  .letters-container {
+    flex-direction: row;
+    flex: 0 0 2.8rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .consonants-container,
+  .marks-container,
+  .vowels-container {
+    display: -webkit-flex;
+    display: flex;
+    flex-direction: row;
+  } 
+
+  .marks-container{
+    justify-content: center;
+  }
+
+  .vowels-container {
+    justify-content: flex-end;
+  }
+
+  .prop-0 {
+    display: none;
+  }
+
+  .prop-10 {
+    flex: 1 1 10%;
+  }
+
+  .prop-20 {
+    flex: 1 1 20%;
+    gap: 6%;
+  }
+
+  .prop-40 {
+    flex: 1 1 40%;
+    gap: 6%;
+  }
+
+  .prop-60 {
+    flex: 1 1 60%;
+    gap: 6%;
+  }
+
+  .prop-80 {
+    flex: 1 1 80%;
+    gap: 6%;
+  }
+
+  .skipped-go {
+    height: 2.25rem;
+  }
+
+  .words-ingo-container {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    flex: 0 0 1.5em;
+    width: 100%;
+    max-height: 1.2em;
+    font-size: 1.4em;
+    border-top-color: lightgrey;
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-bottom-color: lightgrey;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+  }
+
+  .go-word {
+    padding-left: 0.5em;
+    text-align: center;
+  }
+
+  .bank-info {
+    padding-left: 0.5em;
+    padding-top: 0.25rem;
+  }
+
+} /* media (orientation: portrait) */
+
+.skipped-mark {
+  display: inline-block;
+  font-size: 2rem;
+}
+
+.i-warn {
+  color: rgb(255, 230, 0);
+}
+
+.i-critical {
+  color: red;
 }
 
 .human-header {
@@ -365,7 +508,7 @@ export default defineComponent({
 }
 
 .player-icon {
-  margin-right: 8px;
+  margin-right: 0.5rem;
 }
 
 .extra-points {
@@ -378,54 +521,27 @@ export default defineComponent({
 
 .go-points {
   font-weight: bold;
-  background-color: lightgrey;
   color: green;
   font-size: 1em;
 }
 
-.btn-command {
-  margin-top: 4px;
-  margin-bottom: 4px;
-  width: 100%;
-  font-size: 1.2em;
-  border-radius: 6px;
-}
-
-.btn-highlight {
-  filter: invert(100%);
-  /* box-shadow: inset 2px 2px 5px rgba(154, 147, 140, 0.5), 1px 1px 5px rgba(255, 255, 255, 1); */
-}
-
 .player-letter {
-  -webkit-flex: 0 0 40px;
-  -ms-flex: 0 0 40px;
-  flex: 0 0 40px;
-  height: 40px;
-  width: 40px;
-  margin-top: 2px;
-  margin-bottom: 2px;
-  border-radius: 8px;
-  border-width: 2px;
+  -webkit-flex: 0 0 2.5rem;
+  -ms-flex: 0 0 2.5rem;
+  flex: 0 0 2.5rem;
+  height: 2.5rem;
+  width: 2.5rem;
+  font-size: 1.8rem;
+  border-radius: 6px;
+  border-width: 1px;
   border-style: solid;
-  border-color: rebeccapurple;
+  border-color: rgba(128, 128, 128, 0.5);
 }
 
 .current-letter {
-  border-style: dashed;
-  border-color: red;
-}
-
-.item-check {
-  margin-top: -100%;
-  margin-bottom: 0;
-  width: 100%;
-}
-
-/* для стилизации изображения его надо полностью отрисовывать */
-.item-cb {
-  margin-top: 2px;
-  margin-right: 0;
-  margin-left: 50%;
   border-width: 2px;
+  border-style: dashed;
+  border-color: rgba(255, 0, 0, 0.7);
 }
+
 </style>

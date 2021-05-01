@@ -36,32 +36,35 @@
         </check-results-info>
       </template >
       <template #actions>
-        <div>
           <button @click="wordsConfirmed">
             Есть такие слова !
           </button>  
           <button @click="dlgClose('notFoundInDictionary')">Закрыть</button>
-        </div>  
       </template>  
     </modal-dialog>
   </teleport>
-  <div class="flex-container">
-    <div class="container-padding">
-    </div>  
-    <div class="left-panel">
+  <teleport to="#app">
+    <wait-dialog v-if="!modalActive && player1.active" dialogId="robotActive">
+      <template #content>
+        Робот думает...
+      </template>  
+    </wait-dialog>  
+  </teleport>  
+  <div class="game-container">
+    <div class="p0-panel">
       <player-panel 
         :player="player0"
         @set-current-letter="setCurrentLetter"
+      ></player-panel>
+      <player-commmad-panel
+        :player="player0"
         @select-exchange="setSelectForExchange"
         @exchange-letters="exchangeLetters"
         @go-complete="goComplete"
         @get-clue="getClue"
-        @start-new-game="finishTheGame"
-        @save-game="saveGame"
-        @load-game="loadGame"
-      ></player-panel>
+      ></player-commmad-panel>
     </div>
-    <div class="middle-part">
+    <div class="playfield-part">
       <game-report v-if="gameOverShow" 
         :player0="player0" 
         :player1="player1"
@@ -70,7 +73,6 @@
       </game-report>  
       <game-grid v-if="!gameOverShow" :class="{'grid-shadow' : gameOver}"
         :playField="playField"
-        :numLettersInBank="letterBank.numLetters"
         @playfield-remove-letter="returnLetter"
         @playfield-put-letter="putLetter"
       >
@@ -80,14 +82,31 @@
         Начать игру
       </button>  
     </div>
-    <div class="right-panel">
+    <div class="p1-panel">
       <player-panel
         :player="player1"
+        :numLettersInBank="letterBank.numLetters"
       ></player-panel>
+      <game-commmad-panel
+        :gridSize="playField.gridSize"
+        :finishEnabled="!gameOver"
+        :changeGridSizeEnabled="gameOver"
+        @finish-the-game="finishTheGame"
+        @set-grid-size="setGridSize"
+      ></game-commmad-panel>
     </div>
-    <div class="container-padding">
-    </div>  
   </div>
+  <div class="developer-panel" v-if="developerMode">
+    <dev-player-panel
+      :player="developerPlayer"
+      v-model:checkMode="developerPlayer.selectForChange"
+      @set-current-letter="setCurrentLetter"
+      @developer-player-active="toggleDeveloperPayerActive"
+      @developer-checked-send-p0="sendCheckedLettesToP0"
+      @save-game="saveGame"
+      @load-game="loadGame"
+    ></dev-player-panel>
+  </div>  
 </template>
 
 <script lang="ts">
@@ -100,11 +119,17 @@ import { Player } from "./model/Player";
 import { PlayField } from "./model/PlayField";
 import { Dictionary } from "./model/Dictionary";
 import { Robot } from "./model/Robot";
+import { SaveRestoreObj } from "./model/SaveRestoreObj";
 import PlayerPanel from "./components/PlayerPanel.vue";
+import DevPlayerPanel from "./components/DevPlayerPanel.vue"
+import PlayerCommmadPanel from "./components/PlayerCommmadPanel.vue"
+import GameCommmadPanel from "./components/GameCommandPanel.vue"
 import GameGrid from "./components/GameGrid.vue";
 import ModalDialog from "./components/UI/ModalDialog.vue";
+import WaitDialog from "./components/UI/WaitDialog.vue";
 import CheckResultsInfo from "./components/UI/CheckResultsInfo.vue";
 import GameReport from "./components/GameReport.vue"
+import DevCommmadPanel from "./components/DevCommandPanel.vue"
 
 function emptyWordCheckResultArray(): WordCheckResult[] {
   return [] as WordCheckResult[];
@@ -118,34 +143,45 @@ export default defineComponent({
   name: "App",
   components: {
     PlayerPanel,
+    DevPlayerPanel,
+    PlayerCommmadPanel,
+    GameCommmadPanel,
     GameGrid,
     ModalDialog,
+    WaitDialog,
     CheckResultsInfo,
     GameReport
   },
 
   data() {
     return {
+      developerMode:false,
       gameOver: true,
+//#region модальные диалоги
       gameOverShow: false,
       letterBankEmptyShow: false,
       checkResultsShow: false,
       notFoundInDictionaryShow: false,
-      wordCheckResults: emptyWordCheckResultArray(),
       noClueShow: false,
+//#endregion модальные диалоги      
+      wordCheckResults: emptyWordCheckResultArray(),
       // словарь проверки
       gameDictionary: new Dictionary(),
       // игрок интерактивный
       player0: new Player(0, true),
       // игрок-робот
       player1: new Player(1, false),
+      // разработчик
+      developerPlayer: new Player(2, true),
       // бонус за подсказку
       robotCluePortion: 0.5,
       clueWords : emptyWordSiteArray(),
       // банк доступных букв
       letterBank: new LetterBank(),
+      // размерность сетки игровой поляны
+      playFieldGridSize: 13,
       // игровая поляна
-      playField: new PlayField([]),
+      playField: new PlayField(13, []),
       // режим выбора букв для обмена
       selectForChange: false
     };
@@ -156,13 +192,15 @@ export default defineComponent({
       get(): Player | undefined {
         if (this.player1.active) return this.player1;
         else if (this.player0.active) return this.player0;
+        else if (this.developerMode && this.developerPlayer.active)
+          return this.developerPlayer;
         return undefined;
       },
 
       set(player: Player | undefined) {
         if (player === this.player0) {
-          this.player1.active = false;
           this.player0.active = true;
+          this.player1.active = false;
         } else if (player === this.player1) {
           this.player0.active = false;
           this.player1.active = true;
@@ -172,11 +210,12 @@ export default defineComponent({
         }
         if(this.player){
           this.playField.wordsInTheGo = this.player.wordsInTheGo;
-          if (this.player.active && !this.player.interartive) {
-            this.getClue();
-            setTimeout(() => {
+          if (this.player.active && !this.player.interactive) {
+            // чтобы показался диалог ожидания
+            setTimeout( () => {
+              this.getClue();
               this.afterGoComplete();
-            }, 2000);
+            });
           }
         }
       }
@@ -188,11 +227,29 @@ export default defineComponent({
     // слова текущего хода
     wordsInTheGo(): WordSite[] {
       return this.player ? this.player.wordsInTheGo : [];
+    },
+
+    modalActive(): boolean {
+      return this.gameOverShow 
+        || this.letterBankEmptyShow
+        || this.checkResultsShow
+        || this.notFoundInDictionaryShow
+        || this.noClueShow;
     }
   },
 
   methods: {
     closeGameReport(){
+      if(this.player0){
+        this.player0.toInitialState();
+      }
+      if(this.player1){
+        this.player1.toInitialState();
+      }
+      if(this.playField){
+        this.playField.usedWords.length=0;
+        this.playField.cellsInTheGo.length=0;
+      }  
       this.gameOverShow = false;
     },
 
@@ -228,7 +285,9 @@ export default defineComponent({
     // режим выбора букв для обмена
     setSelectForExchange(exchangeMode: boolean){
       this.selectForChange=exchangeMode;
-       // НЕОПР текущеей буквы не даёт ставить на игровое поле
+      if(this.player)
+        this.player.selectForChange=this.selectForChange;
+       // НЕОПР текущей буквы не даёт ставить на игровое поле
       if(this.player && this.selectForChange)
         this.player.currentLetter=undefined;
     }, 
@@ -351,7 +410,8 @@ export default defineComponent({
         console.time("getClue");
         const robot = new Robot(this.gameDictionary, this.playField);
         const wsClue = robot.getClue(this.player.chars, 
-         activePlayer.interartive ? 2 : 3, 15); // робот ставит слова не короче 3 букв
+         activePlayer.interactive ? 2 : 3, 
+         this.playFieldGridSize); // робот ставит слова не короче 3 букв
         console.timeEnd("getClue");
         if (wsClue) {
           const preClueWords: WordSite[]=[];
@@ -366,7 +426,7 @@ export default defineComponent({
             }
           });
           // подсказка зачтётся роботу
-          if(activePlayer.interartive){
+          if(activePlayer.interactive){
             const postClueWords: WordSite[]=[];
             postClueWords.push(...this.player.wordsInTheGo);
             this.clueWords=[];
@@ -379,7 +439,7 @@ export default defineComponent({
           }
         }
         else{
-          if(activePlayer.interartive)
+          if(activePlayer.interactive)
             this.noClueShow=true;
         }
       }
@@ -388,7 +448,7 @@ export default defineComponent({
     afterGoComplete() {
       if(this.player){
         const numLettersPut=this.playField.cellsInTheGo.length;
-        this.playField.afterGoComplete();
+        this.playField.afterGoComplete(this.player.id);
         if(this.player === this.player0){
           this.clueWords.forEach( (clueWord) =>{
 
@@ -443,7 +503,7 @@ export default defineComponent({
           this.checkResultsShow = true;
           return;
         } 
-        if(this.player?.interartive){
+        if(this.player?.interactive){
           if(forceDictionarySearch){
             this.wordCheckResults = this.checkGoWordsInDictionary();
             if (this.wordCheckResults.length !== 0) {
@@ -526,16 +586,16 @@ export default defineComponent({
       // банк доступных букв
       this.letterBank = new LetterBank();
       // игровая поляна
-      this.playField = new PlayField([]);
+      this.playField = new PlayField(this.playFieldGridSize, []);
       this.clueWords.length=0;
       this.setIniWord();
-
       // this.setIniWordDbg();
-      // const iniLetters=this.letterBank.getLettersForWord("палепол") as Letter[];
-      // this.player0.addChars(...iniLetters);
       
       // установка начального состояния поляны после постановки инициального слова
-      this.playField.afterGoComplete();
+      this.playField.afterGoComplete(-1);
+      // const iniLetters=this.letterBank.getLettersForWord("аоупзйх") as Letter[];
+      // this.player0.addChars(...iniLetters);
+
       this.player0.addChars(
         ...this.letterBank.getRandom(this.player0.needChars)
       );
@@ -547,27 +607,18 @@ export default defineComponent({
       this.setCurrentLetter(this.player.chars[0]);
     },
 
+    setGridSize(gridSize: number){
+      this.playFieldGridSize=gridSize;
+      this.playField = new PlayField(this.playFieldGridSize, []);
+    },
+
     finishTheGame(){
       this.gameOver = true;
       this.gameOverShow = true;
       this.player=undefined;
     },
 
-    saveGame() {
-      const cellGrigBlob = this.playField.saveCellGrid();
-      const a = document.createElement("a");
-      a.download = "test.json";
-      a.href = window.URL.createObjectURL(cellGrigBlob);
-      a.click();
-    },
-
-    loadGame(file: File) {
-      file.text().then(text => {
-        this.playField.loadCellGrid(text);
-      });
-    },
-
-    // события игрового поля
+//#region события игрового поля
     putLetter(iRow: number, jCol: number) {
       if(this.player){
         if (this.player.currentLetter) {
@@ -580,78 +631,326 @@ export default defineComponent({
               this.player.id
             )
           ) {
+            if(this.developerMode && this.player === this.developerPlayer)
+              return;
             this.playerLetters.splice(iLetter, 1);
             if (this.playerLetters.length !== 0) {
               iLetter = iLetter % this.playerLetters.length;
               this.player.currentLetter = this.playerLetters[iLetter];
-            } else this.player.currentLetter = undefined;
+            } 
+            else 
+              this.player.currentLetter = undefined;
           }
         }
       }
     },
 
+    // возврат буквы игроку, она становится текущей
     returnLetter(iRow: number, jCol: number) {
       if(this.player){
         const letterSite = this.playField.cellGrid[iRow][jCol];
         if (letterSite.letter) {
           this.playField.removeLetter(letterSite);
+          if(this.developerMode && this.player === this.developerPlayer)
+            return;
           this.player.addChars(letterSite.letter);
-          if (!this.player.currentLetter)
-            this.player.currentLetter = letterSite.letter;
+          this.player.currentLetter = letterSite.letter;
         }
       }
+    },
+//#endregion события игрового поля
+
+//#region Developer Mode
+
+    initDeveloperPlayer() {
+      this.developerPlayer=new Player(2, true);
+      // const iniLettes = this.letterBank.getLettersForWord("ъ", false) as Letter[];
+      const iniLettes = this.letterBank.getLettersForWord("абвгдежзийклмнопрстуфхцчшщьыъэюя", false) as Letter[];
+      this.developerPlayer.maxNumLetters=32;
+      iniLettes.forEach( lt => this.developerPlayer.addChars(lt));
+    },
+
+    initDeveloperMode() {
+      this.gameOver = false;
+      this.gameDictionary = new Dictionary();
+      // интерактивный игрок
+      this.player0 = new Player(0, true);
+      // игрок-робот
+      this.player1 = new Player(1, false);
+      // банк доступных букв
+      this.letterBank = new LetterBank();
+      // игровая поляна
+      this.playField = new PlayField(this.playFieldGridSize, []);
+      this.clueWords.length=0;
+      
+      this.playField.afterGoComplete(-1);
+
+      this.initDeveloperPlayer();
+    },
+
+    finitDeveloperMode() {
+      this.developerPlayer.active=false;
+      this.developerPlayer.selectForChange=false;
+      this.developerPlayer.numGo=0;
+      this.developerPlayer.numSkippedGo=0;
+      this.developerPlayer.extraPoints=0;
+      this.developerPlayer.currentLetter=undefined;
+      this.developerPlayer.wordsInTheGo.length=0;
+      this.developerPlayer.allWords.length=0;
+      this.developerPlayer.chars.forEach(
+        lt=>lt.clean()
+      );
+      this.startNewGame();
+    },
+
+    saveGame() {
+      const srObj=new SaveRestoreObj(this.playField, this.player0, this.player1);
+      const gameBlob = srObj.save();
+      const a = document.createElement("a");
+      a.download = "eru_game.json";
+      a.href = window.URL.createObjectURL(gameBlob);
+      a.click();
+    },
+
+    loadGame(file?: File) {
+      if(file){
+        const srObj=new SaveRestoreObj(this.playField, this.player0, this.player1);
+        file.text().then(text => {
+          srObj.restore(text);
+          this.player=this.player0;
+        });
+      }
+    },
+    
+    toggleDeveloperPayerActive() {
+      if(this.developerPlayer.active){
+        this.developerPlayer.active=false;
+        this.developerPlayer.selectForChange=false;
+        this.playField.afterGoComplete(-1);
+        this.player=this.player0;
+      }
+      else{
+        this.player0.active=false;
+        this.player1.active=false;
+        this.developerPlayer.active=true;
+        this.playField.wordsInTheGo = this.developerPlayer.wordsInTheGo;
+      }
+    },
+    
+    sendCheckedLettesToP0(){
+      this.player0.chars.length=0;
+      this.developerPlayer.chars.forEach(
+        (lt) => {
+          if(lt.flagged)
+            this.player0.addChars(new Letter(lt.character, lt.points));
+        }
+      );
+    },
+
+    onKeyPressed(event: KeyboardEvent){
+      if (event.key === 'd'){
+        this.developerMode=!this.developerMode;
+        if(this.developerMode)
+          this.initDeveloperMode();
+        else
+          this.finitDeveloperMode();
+        }
+    },
+//#endregion  Developer Mode
+  },
+  
+  mounted() {
+    if(document.location.hostname === "localhost"){
+      window.addEventListener("keypress", this.onKeyPressed);
+    }
+  },
+
+  unmounted() {
+    if(document.location.hostname === "localhost"){
+      window.removeEventListener("keypress", this.onKeyPressed);
     }
   }
-
-  // created() {
-  //   this.startNewGame();
-  // }
 });
 </script>
 
-<style lang="scss">
+<style>
 html,
 body {
-  height: 100%;
+  font-size: 16px;
   margin: 0;
+  height: 100%;
 }
 
-.flex-container {
+.game-container {
   display: -webkit-flex;
   display: flex;
-  flex-direction: row;
 }
 
-.container-padding{
-  flex: 1 1;
+.p0-panel {
+  display: -webkit-flex;
+  display: flex;
 }
 
-.left-panel {
-  -webkit-flex: 0 0 auto;
-  -ms-flex: 0 0 auto;
-  flex: 0 0 auto;
-  border-right-color: green;
-  border-right-style:solid;
-  border-right-width: 4px;
+.p1-panel {
+  display: -webkit-flex;
+  display: flex;
 }
 
-.right-panel {
-  -webkit-flex: 0 0 auto;
-  -ms-flex: 0 0 auto;
-  flex: 0 0 auto;
-  border-left-color: blue;
-  border-left-style: solid;
-  border-left-width: 4px;
-}
-
-.middle-part {
-  -webkit-flex: 0 0 auto;
-  -ms-flex: 0 0 auto;
-  flex: 0 0 auto;
-  min-width: 640px;
-  padding: 10px 6px;
+.playfield-part {
   position: relative;
 }
+
+/* глобально: нажатая кнопка */
+.btn-highlight {
+  background-color: rgb(128,92,92);
+  color: antiquewhite;
+}
+
+.developer-panel {
+  display: none;
+}
+
+/* панель разработчика только на большом экране */
+@media only screen 
+  and (min-width: 1280px)
+  and (min-height: 1024px)
+  and (-webkit-device-pixel-ratio: 1) 
+{
+
+.developer-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 6px 0;
+}
+
+}
+
+@media (orientation: landscape){
+  .game-container {
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .p0-panel {
+    flex-direction: column;
+    border-right-color: green;
+    border-right-style:solid;
+    border-right-width: 4px;
+    min-width: 9rem;
+  }
+
+  .p1-panel {
+    flex-direction: column;
+    border-left-color: blue;
+    border-left-style: solid;
+    border-left-width: 4px;
+    min-width: 9rem;
+  }
+}
+
+@media (orientation: portrait){
+  .game-container {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .p0-panel {
+    flex-direction: column;
+    border-bottom-color: green;
+    border-bottom-style:solid;
+    border-bottom-width: 4px;
+  }
+
+  .p1-panel {
+    flex-direction: column;
+    border-top-color: blue;
+    border-top-style: solid;
+    border-top-width: 4px;
+  }
+}
+
+/* @media (-webkit-device-pixel-ratio: 2) 
+ {
+  html,
+  body {
+    background-color: rgba(255, 255, 0, 0.4);
+  }
+} 
+ */
+/* iPhone 12 landscape */
+@media only screen 
+    and (device-width: 844px) 
+    and (device-height: 390px) 
+    and (-webkit-device-pixel-ratio: 3) 
+{
+  html,
+  body {
+    font-size: 10.2px;
+  }
+}    
+
+/* iPhone 12 portrait */
+@media only screen 
+    and (device-width: 390px) 
+    and (device-height: 844px) 
+    and (-webkit-device-pixel-ratio: 3) 
+{
+  html,
+  body {
+    font-size: 10.2px;
+  }
+}    
+
+/* 1792x828px at 326ppi (iPhone 11)  landscape*/
+@media only screen 
+    and (device-width: 896px) 
+    and (device-height: 414px) 
+    and (-webkit-device-pixel-ratio: 2) 
+{ 
+  html,
+  body {
+    font-size: 10.9px;
+  }
+}
+
+/* 1792x828px at 326ppi (iPhone 11)  portrait */
+@media only screen 
+    and (device-width: 414px) 
+    and (device-height: 896px) 
+    and (-webkit-device-pixel-ratio: 2) 
+{ 
+  html,
+  body {
+    font-size: 10.2px;
+  }
+
+}
+
+/* Samsung A70  landscape */
+@media only screen 
+    and (device-width: 712px) 
+    and (device-height: 320px) 
+    and (-webkit-device-pixel-ratio: 3)
+{
+  html,
+  body {
+    font-size: 7.75px;
+  }
+}
+
+/* Samsung A70  portrait */
+@media only screen 
+  and (device-width: 320px)
+  and (device-height: 712px)
+      and (-webkit-min-device-pixel-ratio: 3){
+  html,
+  body {
+    font-size: 7.75px;
+  }
+}
+
 
 .grid-shadow {
   background-color: rgba(0, 0, 0, 0.25);
@@ -678,13 +977,23 @@ body {
   -moz-osx-font-smoothing: grayscale;
   overflow-x: auto;
   overflow-y: auto;
-  // вертикальная центровка
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  
   height: 100%;
-  color: #2c3e50;
 }
+
+#app:-webkit-full-screen {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+#app:-ms-fullscreen {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+#app:-moz-full-screen {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+#app:fullscreen {
+  background-color: rgba(255, 255, 255, 1);
+}
+
 </style>

@@ -1,13 +1,13 @@
 <template>
   <div>
     <h2
-      :class="{ 'human-header': player.interartive, 'robot-header': !player.interartive }"
+      :class="{ 'human-header': player.interactive, 'robot-header': !player.interactive }"
     >
-      <font-awesome-icon class="player-icon" icon="user" v-if="player.interartive" />
+      <font-awesome-icon class="player-icon" icon="user" v-if="player.interactive" />
       <font-awesome-icon
         class="player-icon"
         icon="robot"
-        v-if="!player.interartive"
+        v-if="!player.interactive"
       />
       <span>{{ player.totalPoints }}</span>
     </h2>
@@ -54,11 +54,11 @@ export default defineComponent({
 
 <style scoped>
 .human-header {
-  color: lightgreen;
+  color: green;
 }
 
 .robot-header {
-  color: lightblue;
+  color: blue;
 }
 
 .player-icon {

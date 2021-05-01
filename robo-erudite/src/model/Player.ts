@@ -2,10 +2,17 @@ import { Letter } from "./Letter";
 import { LetterSite } from "./LetterSite";
 import { WordSite } from "./WordSite";
 
+export enum GoCompleteMode {
+  skip=0,
+  exchange=1,
+  ready=2
+}
+
+
 export class Player {
   maxNumLetters = 7;
   // интерактивный, иначе - робот
-  interartive = false;
+  interactive = false;
   // активный
   active = false;
   // идентификатор игрока
@@ -18,6 +25,8 @@ export class Player {
   extraPoints = 0;
   // буквы игрока
   chars: Letter[]=[];
+  // режим выбора букв для обмена
+  selectForChange = false;
   // тек. буква для помещения на поле
   currentLetter: Letter | undefined;
   // слова текущего хода
@@ -26,8 +35,20 @@ export class Player {
   allWords: WordSite[]=[];
 
   constructor(playerId: number, interactive: boolean) {
-    this.interartive = interactive;
+    this.interactive = interactive;
     this.id = playerId;
+  }
+
+  toInitialState()
+  {
+    this.numGo=0;
+    this.numSkippedGo=0;
+    this.extraPoints=0;
+    this.chars.length=0;
+    this.selectForChange=false;
+    this.currentLetter=undefined;
+    this.allWords.length=0;
+    this.wordsInTheGo.length=0;
   }
 
   get needChars() {
@@ -114,6 +135,16 @@ export class Player {
     return false;
   }
 
+  private sortLetters() 
+  {
+    this.chars.sort( (a,b) =>
+    {
+      const pointsA=a.isConsonant ? 1 : (a.isVowel ? -1 : 0);
+      const pointsB=b.isConsonant ? 1 : (b.isVowel ? -1 : 0);
+      return pointsB - pointsA;
+    } );
+  }
+
   addChars(...letters: Letter[]): void {
     for (
       let i = 0;
@@ -123,6 +154,7 @@ export class Player {
       letters[i].clean();
       this.chars.push(letters[i]);
     }
+    this.sortLetters();
   }
 
   afterGoComplete() {
@@ -137,6 +169,7 @@ export class Player {
       });
     }
     this.wordsInTheGo.length = 0;
+    this.selectForChange = false;
     this.currentLetter = undefined;
   }
 }

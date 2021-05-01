@@ -68,21 +68,28 @@ export default defineComponent({
     overflow-x: auto;
     display: flex;
     flex-direction: column;
-    min-width: 200px;
-    min-height: 150px;
+    min-width: 26rem;
+    min-height: 16rem;
     border-radius: 8px;
-  }
-
-  .modal-footer {
-    border-top: 1px solid #eeeeee;
-    padding: 5px;
-    flex: 0 0 auto;
   }
 
   .modal-body {
     position: relative;
-    padding: 20px 10px;
-    flex: 1;
+    padding: 0.2rem;
+    font-size: 1.5rem;
+    flex: 1 1 auto;
+  }
+
+  .modal-footer {
+    display: -webkit-flex;
+    display: flex;
+    flex-direction: row;
+    flex: 0 0 auto;
+    border-top: 1px solid #eeeeee;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 4px;
+    font-size: 1.5rem;
   }
 
   .modal-footer button {
@@ -90,9 +97,7 @@ export default defineComponent({
     background: #4AAE9B;
     border: 1px solid #4AAE9B;
     border-radius: 4px;
-    margin-left: 4px;
-    margin-right: 4px;
-    font-size: 1.5em;
+    font-size: 1em;
     border-radius: 8px;
 }
 

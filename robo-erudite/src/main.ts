@@ -4,9 +4,9 @@ import App from "./App.vue";
 import { library } from "@fortawesome/fontawesome-svg-core";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import { faTimesCircle } from "@fortawesome/free-solid-svg-icons";
-import { faRobot, faUser } from "@fortawesome/free-solid-svg-icons";
+import { faRobot, faUser, faExpand } from "@fortawesome/free-solid-svg-icons";
 
-library.add(faUser, faRobot, faTimesCircle);
+library.add(faUser, faRobot, faTimesCircle, faExpand);
 const app = createApp(App);
 app.component("font-awesome-icon", FontAwesomeIcon);
 app.mount("#app");

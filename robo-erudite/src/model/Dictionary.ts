@@ -1,5 +1,8 @@
 import { DictionaryWord } from "../data/DictionaryWord";
 // tsconfig.json добавлен флаг "resolveJsonModule": true
+// Основа словаря - частотный словарь (Ляшевская, Шаров)
+// словарь создан отбором существительнх длиной от 2 до 15 букв
+// с обратной сортировкой по частоте использования
 import dictionary from "../assets/dictionary.json";
 import { WordSite } from "./WordSite";
 
