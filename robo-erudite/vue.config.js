@@ -2,5 +2,5 @@ module.exports = {
   configureWebpack: {
     devtool: "source-map"
   },
-  outputDir: "../wwwroot/robo-erudite"
+  outputDir: "../erudite.web/wwwroot/robo-erudite"
 };

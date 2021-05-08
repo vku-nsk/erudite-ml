@@ -1,9 +1,9 @@
 <template>
   <div class="buttons-container">
     <command-button
-      :disabled="!finishEnabled"
-      @command="$emit('finish-the-game')">
-      <span>Завершить</span>
+      :disabled="!explainEnabled"
+      @command="$emit('get-word-definition')">
+      <span>Поясни!</span>
     </command-button>
     <div class="mini-btn-container">
       <command-button class="mini-button"
@@ -19,6 +19,11 @@
         13
       </command-button>
     </div>
+    <command-button
+      :disabled="!finishEnabled"
+      @command="$emit('finish-the-game')">
+      <span>Завершить</span>
+    </command-button>
   </div>
 </template>
 
@@ -38,6 +43,10 @@ export default defineComponent({
       type: Boolean,
       required: true
     },
+    explainEnabled: {
+      type: Boolean,
+      required: true
+    },
     changeGridSizeEnabled: {
       type: Boolean,
       required: true
@@ -49,6 +58,7 @@ export default defineComponent({
   },
   emits: {
     "finish-the-game": function () { return true},
+    "get-word-definition": function () { return true},
     "set-grid-size": function(gridSize: number) {
       return true;
     },

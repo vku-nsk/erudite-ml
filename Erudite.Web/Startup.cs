@@ -9,6 +9,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using VueCliMiddleware;
+using Erudite.Data;
+using Erudite.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace Erudite
 {
@@ -25,6 +28,15 @@ namespace Erudite
     {
       services.AddRazorPages();
       services.AddControllers();
+
+      services.AddDbContext<EruditeDbContext>( opts =>
+        {
+          opts.EnableDetailedErrors();
+          opts.UseNpgsql(Configuration.GetConnectionString("EruditeDb.dev"));
+        }
+      );
+
+      services.AddTransient<IDictionaryService, DictionaryService>();
     }
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -51,7 +63,7 @@ namespace Erudite
             "{*path}",
             new SpaOptions
             {
-              SourcePath = "robo-erudite"
+              SourcePath = "../robo-erudite"
             },
             npmScript: "watch",
             regex: "Compiled successfully",

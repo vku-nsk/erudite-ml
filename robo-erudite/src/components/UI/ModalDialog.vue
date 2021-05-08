@@ -71,6 +71,8 @@ export default defineComponent({
     min-width: 26rem;
     min-height: 16rem;
     border-radius: 8px;
+    max-width: 80%;
+    max-height: 80%;
   }
 
   .modal-body {

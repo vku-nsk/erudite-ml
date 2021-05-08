@@ -44,6 +44,25 @@
     </modal-dialog>
   </teleport>
   <teleport to="#app">
+    <modal-dialog v-if="dictionaryLoadFailedShow" dialogId="dictionaryLoadFailed" @close="dlgClose">
+      <template #content>
+        Не удалось загрузить словарь
+      </template>
+    </modal-dialog>
+  </teleport>
+  <teleport to="#app">
+    <modal-dialog v-if="wordDefinitionShow" dialogId="wordDefinition" @close="dlgClose">
+      <template #content>
+        <word-defn-info v-if="wordDefinitionInfo.definition.length !== 0"
+          :wordDefinitionInfo="wordDefinitionInfo">
+        </word-defn-info>  
+        <p v-else>
+          Определение слова не найдено.
+        </p>
+      </template>
+    </modal-dialog>
+  </teleport>
+  <teleport to="#app">
     <wait-dialog v-if="!modalActive && player1.active" dialogId="robotActive">
       <template #content>
         Робот думает...
@@ -78,6 +97,7 @@
       >
       </game-grid>
       <button id="startGame" v-if="gameOver && !gameOverShow"
+        :disabled="!dictionaryLoaded"
         @click="startNewGame">
         Начать игру
       </button>  
@@ -89,10 +109,12 @@
       ></player-panel>
       <game-commmad-panel
         :gridSize="playField.gridSize"
+        :explainEnabled="!modalActive && wordToExplain !== undefined"
         :finishEnabled="!gameOver"
         :changeGridSizeEnabled="gameOver"
         @finish-the-game="finishTheGame"
         @set-grid-size="setGridSize"
+        @get-word-definition="getWordDefinition"
       ></game-commmad-panel>
     </div>
   </div>
@@ -118,6 +140,7 @@ import { LetterBank } from "./model/LetterBank";
 import { Player } from "./model/Player";
 import { PlayField } from "./model/PlayField";
 import { Dictionary } from "./model/Dictionary";
+import { WordDefinition } from "./data/WordDefinition"
 import { Robot } from "./model/Robot";
 import { SaveRestoreObj } from "./model/SaveRestoreObj";
 import PlayerPanel from "./components/PlayerPanel.vue";
@@ -127,9 +150,9 @@ import GameCommmadPanel from "./components/GameCommandPanel.vue"
 import GameGrid from "./components/GameGrid.vue";
 import ModalDialog from "./components/UI/ModalDialog.vue";
 import WaitDialog from "./components/UI/WaitDialog.vue";
+import WordDefnInfo from "./components/UI/WordDefnInfo.vue"
 import CheckResultsInfo from "./components/UI/CheckResultsInfo.vue";
 import GameReport from "./components/GameReport.vue"
-import DevCommmadPanel from "./components/DevCommandPanel.vue"
 
 function emptyWordCheckResultArray(): WordCheckResult[] {
   return [] as WordCheckResult[];
@@ -150,7 +173,8 @@ export default defineComponent({
     ModalDialog,
     WaitDialog,
     CheckResultsInfo,
-    GameReport
+    GameReport,
+    WordDefnInfo
   },
 
   data() {
@@ -163,10 +187,16 @@ export default defineComponent({
       checkResultsShow: false,
       notFoundInDictionaryShow: false,
       noClueShow: false,
+      dictionaryLoadFailedShow: false,
+      wordDefinitionShow: false,
 //#endregion модальные диалоги      
       wordCheckResults: emptyWordCheckResultArray(),
       // словарь проверки
       gameDictionary: new Dictionary(),
+      // словарь загружен
+      dictionaryLoaded: false,
+      // определение слова по запросу
+      wordDefinitionInfo: new WordDefinition("", ""),
       // игрок интерактивный
       player0: new Player(0, true),
       // игрок-робот
@@ -229,13 +259,30 @@ export default defineComponent({
       return this.player ? this.player.wordsInTheGo : [];
     },
 
+    // слово для запроса определения
+    wordToExplain(): string | undefined {
+      if(this.clueWords.length != 0){
+        const word=this.clueWords[this.clueWords.length-1].str;
+        return word;
+      }
+      if(this.playField.wordsInPrevGo.length != 0){
+        const word=this.playField.wordsInPrevGo[0].str;
+        if(word.length != 0)
+          return word;
+      }
+      return undefined;
+    },
+
     modalActive(): boolean {
       return this.gameOverShow 
         || this.letterBankEmptyShow
         || this.checkResultsShow
         || this.notFoundInDictionaryShow
-        || this.noClueShow;
+        || this.noClueShow
+        || this.dictionaryLoadFailedShow
+        || this.wordDefinitionShow;
     }
+
   },
 
   methods: {
@@ -268,6 +315,13 @@ export default defineComponent({
       else if (dlgId === "letterBankEmpty"){
         this.letterBankEmptyShow=false;
         this.finishTheGame();
+      }
+      else if (dlgId === "dictionaryLoadFailed") {
+        this.dictionaryLoadFailedShow=false;
+      }
+      else if (dlgId === "wordDefinition") {
+        this.wordDefinitionShow=false;
+        this.wordDefinitionInfo=new WordDefinition("", "");
       }
     },
 
@@ -578,7 +632,6 @@ export default defineComponent({
 
     startNewGame() {
       this.gameOver = false;
-      this.gameDictionary = new Dictionary();
       // интерактивный игрок
       this.player0 = new Player(0, true);
       // игрок-робот
@@ -605,6 +658,23 @@ export default defineComponent({
       // активный игрок
       this.player = this.player0;
       this.setCurrentLetter(this.player.chars[0]);
+    },
+    
+    async getWordDefinition() {
+      if(this.wordToExplain){
+        console.log(`get definition for: ${this.wordToExplain}`);
+        try{
+          const wordDefn=await this.gameDictionary.getWordDefinition(this.wordToExplain);
+          if(wordDefn)
+            this.wordDefinitionInfo=wordDefn;
+          else  
+            this.wordDefinitionInfo=new WordDefinition(this.wordToExplain, "");
+          this.wordDefinitionShow=true;
+        }
+        catch(err){
+          console.log(err);
+        }
+      }
     },
 
     setGridSize(gridSize: number){
@@ -672,7 +742,6 @@ export default defineComponent({
 
     initDeveloperMode() {
       this.gameOver = false;
-      this.gameDictionary = new Dictionary();
       // интерактивный игрок
       this.player0 = new Player(0, true);
       // игрок-робот
@@ -759,9 +828,24 @@ export default defineComponent({
 //#endregion  Developer Mode
   },
   
+  created() {
+    this.gameDictionary.load().then(
+      () => {this.dictionaryLoaded=this.gameDictionary.loaded;}
+    );
+  },
+
   mounted() {
     if(document.location.hostname === "localhost"){
       window.addEventListener("keypress", this.onKeyPressed);
+    }
+    if(!this.dictionaryLoaded){
+      setTimeout(
+        () => {
+          if(!this.dictionaryLoaded)
+            this.dictionaryLoadFailedShow=true;
+        },
+        6000
+      );
     }
   },
 
