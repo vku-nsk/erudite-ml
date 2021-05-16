@@ -1,0 +1,26 @@
+# Please refer https://aka.ms/HTTPSinContainer on how to setup an https developer certificate for your ASP .NET Core service.
+
+version: '3.4'
+
+services:
+  erudite:
+    image: eruditeml
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on: 
+      - pg_db  
+    ports:
+      - "5050:5050"
+  pg_db:
+    image: postgres:13
+    restart: unless-stopped
+    volumes:
+      - eruditedb:/var/lib/postgresql/data:rw
+    environment:
+      - POSTGRES_PASSWORD=SoTo_4444
+    ports: 
+      - "5055:5432"
+volumes:
+  eruditedb:         
